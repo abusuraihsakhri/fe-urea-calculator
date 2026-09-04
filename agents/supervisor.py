@@ -3,7 +3,7 @@ Supervisor Orchestrator & Operations Intelligence for Fe Urea Calculator.
 Domain: Clinical & Biomedical AI
 """
 import uuid
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from .base import AuditLogger, ActionExecutor, PHIGuard
 from .models import SystemTaskPayload, AgentAlert, ConsensusDossier, UrgencyLevel, SystemIntegrityStatus
 from .workers import InvariantQCWorker, SafetyEscalationWorker, ProtocolConformanceWorker

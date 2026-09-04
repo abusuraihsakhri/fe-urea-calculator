@@ -1,7 +1,7 @@
 # Fe Urea Calculator
 
-> **Domain:** Nephrology & Renal Replacement Protocols  
-> **Reference Guidelines & Standards:** `KDIGO & KDOQI Clinical Guidelines`
+> **Domain:** Nephrology & Renal Replacement Protocols
+> **Reference Guidelines & Standards:** KDIGO & KDOQI Clinical Guidelines
 
 <div align="center">
 
@@ -18,10 +18,10 @@
 
 ## 📖 What It Does
 
-Fractional Excretion of Urea (FEUrea) Calculator
-Differentiates prerenal azotemia from acute tubular necrosis when diuretics invalidate FENa.
+Fractional Excretion of Urea (FEUrea) Calculator differentiates prerenal azotemia from acute tubular necrosis (ATN) when diuretics invalidate FENa (Fractional Excretion of Sodium).
 
-Zero-dependency Python implementation with single and batch evaluation.
+Zero-dependency Python implementation with single and batch evaluation capabilities.
+
 Author: Dr. Abu Suraih Sakhri
 License: MIT
 
@@ -31,64 +31,92 @@ License: MIT
 
 ### 🔬 Analytical Functions
 
-- **`calculate_metrics()`**: Core domain algorithm for fe-urea-calculator.
-- **`process_single()`** — calculates and validates process_single parameters.
-- **`process_batch()`** — calculates and validates process_batch parameters.
-- **`main()`** — calculates and validates main parameters.
+- **`calculate_fe_urea()`**: Core FEUrea calculation using the standard formula.
+- **`calculate_metrics()`**: Legacy compatibility wrapper supporting v1/v2/v3 parameters.
+- **`process_single()`**: Evaluate a single case from CLI arguments.
+- **`process_batch()`**: Process CSV files with multiple patient records.
 
 ---
 
-## 📐 Mathematical Formulation & Logic
+## 📐 Mathematical Formulation
 
-```text
-  score = primary_val
-  rounded_score = round(score, 2)
-  res = calculate_metrics(**kwargs)
-  calc_res = calculate_metrics(**r)
+The Fractional Excretion of Urea is calculated as:
+
+```
+FEUrea = (Urine_Urea × Serum_Creatinine) / (Serum_Urea × Urine_Creatinine) × 100
+```
+
+### Clinical Interpretation
+
+| FEUrea Value | Classification | Recommendation |
+|:-------------|:---------------|:---------------|
+| < 35% | Prerenal Azotemia | Consider volume resuscitation and hemodynamic optimization |
+| >= 35% | Acute Tubular Necrosis / Intrinsic Renal Disease | Avoid volume overload; consider nephrology consultation |
+
+---
+
+## 💻 Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/abusuraihsakhri/fe-urea-calculator.git
+cd fe-urea-calculator
+
+# Install dependencies
+pip install -e .
+
+# Or install with development dependencies
+pip install -e ".[dev]"
 ```
 
 ---
 
-## 💻 CLI Quickstart & Usage
+## 🚀 CLI Quickstart & Usage
 
-### 1. Guided Interactive Mode
+### 1. Single Case Evaluation
 ```bash
-python cli.py
+python -m fe_urea single --serum-creatinine 1.2 --urine-creatinine 120.0 --serum-urea 25.0 --urine-urea 250.0
 ```
 
-### 2. Direct Parameterized Evaluation
+### 2. Batch CSV Processing
 ```bash
-python cli.py --task-id <value> --target <value> --primary <value> --secondary <value>
+python -m fe_urea batch -i sample.csv -o results.csv
 ```
 
 ### Parameter Reference
-- `--task-id`: Specifies input measurement or parameter value.
-- `--target`: Specifies input measurement or parameter value.
-- `--primary`: Specifies input measurement or parameter value.
-- `--secondary`: Specifies input measurement or parameter value.
-- `--critical`: Specifies input measurement or parameter value.
-- `--status`: Specifies input measurement or parameter value.
-- `--input`: Specifies input measurement or parameter value.
-- `--output`: Specifies input measurement or parameter value.
+| Parameter | Description | Default |
+|:----------|:------------|:--------|
+| `--serum-creatinine` | Serum creatinine (mg/dL) | 1.0 |
+| `--urine-creatinine` | Urine creatinine (mg/dL) | 100.0 |
+| `--serum-urea` | Serum urea (mg/dL) | 20.0 |
+| `--urine-urea` | Urine urea (mg/dL) | 200.0 |
 
-### Input Data Schema
+### Input Data Schema (CSV)
 
 | Field | Description | Requirement |
 |:------|:------------|:------------|
-| `Patient_ID` | Parameter / observation metric | Required |
-| `v1` | Parameter / observation metric | Required |
-| `v2` | Parameter / observation metric | Required |
-| `v3` | Parameter / observation metric | Required |
+| `Patient_ID` | Patient identifier | Required |
+| `serum_creatinine` | Serum creatinine concentration (mg/dL) | Required |
+| `urine_creatinine` | Urine creatinine concentration (mg/dL) | Required |
+| `serum_urea` | Serum urea concentration (mg/dL) | Required |
+| `urine_urea` | Urine urea concentration (mg/dL) | Required |
 
 ---
 
 ## 🛡️ Security & Enterprise Architecture
 
-* **Zero-PHI Outbound Interceptor:** Active AST and regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation and state transition.
-* **Air-Gapped LLM Reasoning Adapter:** Agnostic integration for local Ollama instances (`llama3`, `mistral`), Claude 3.5 Sonnet, GPT-4o, and deterministic test mocks.
-* **Active Learning Bayesian Calibration:** Dynamic tracker updating worker reliability weights and monitoring Brier calibration drift.
+* **Zero-PHI Outbound Interceptor:** Active regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
+* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation.
 * **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
+
+### Environment Variables
+
+| Variable | Description | Default |
+|:---------|:------------|:--------|
+| `AUDIT_SECRET_KEY` | HMAC secret key for audit trail signing | Random (generated per session) |
+| `MODEL_PROVIDER` | LLM provider for supervisor chat | `mock` |
+
+> **Security Note:** Always set `AUDIT_SECRET_KEY` in production environments to ensure consistent audit trail verification across restarts.
 
 ---
 
@@ -111,6 +139,50 @@ python simulator.py --tasks 1000 --concurrency 8
 ## 🐳 Container Deployment
 
 ```bash
+# Build and run with Docker
 docker build -t fe-urea-calculator .
-docker run -p 8000:8000 fe-urea-calculator
+docker run -p 8000:8000 -e AUDIT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))") fe-urea-calculator
+
+# Or use Docker Compose
+docker-compose up -d
 ```
+
+---
+
+## 📁 Project Structure
+
+```
+fe-urea-calculator/
+├── fe_urea.py              # Core FEUrea calculation logic
+├── cli.py                  # Enterprise CLI interface
+├── simulator.py            # High-throughput simulation testing
+├── enrichment.py           # Domain enrichment engines
+├── sample.csv              # Sample input data
+├── test_fe_urea.py         # Core functionality tests
+├── agents/                 # Enterprise agent framework
+│   ├── __init__.py
+│   ├── api.py              # FastAPI REST endpoints
+│   ├── base.py             # Security, PHI guard, audit trail
+│   ├── models.py           # Pydantic data models
+│   ├── supervisor.py       # Multi-agent orchestrator
+│   ├── workers.py          # Specialized domain workers
+│   ├── llm_factory.py      # LLM provider factory
+│   ├── learning.py         # Bayesian calibration engine
+│   ├── metrics.py          # Prometheus metrics exporter
+│   └── streamer.py         # WebSocket telemetry streamer
+├── tests/                  # Additional test suites
+│   ├── test_enrichment.py
+│   └── test_fe_urea_calculator.py
+├── web/                    # Operations console UI
+│   └── index.html
+├── Dockerfile
+├── docker-compose.yml
+├── pyproject.toml
+└── README.md
+```
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -7,7 +7,7 @@ import json
 import sys
 from agents.models import SystemTaskPayload
 from agents.supervisor import SystemSupervisor
-from agents.base import AuditLogger
+from agents.base import AuditLogger  # noqa: F401 - used for side-effect audit initialization
 
 supervisor = SystemSupervisor(model_provider="mock")
 
