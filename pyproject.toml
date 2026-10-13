@@ -37,6 +37,9 @@ dev = [
 [project.scripts]
 fe-urea-calculator = "cli:main"
 
+[tool.setuptools]
+py-modules = ["cli", "fe_urea", "enrichment", "simulator"]
+
 [tool.setuptools.packages.find]
 include = ["agents*"]
 
