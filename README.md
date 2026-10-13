@@ -1,188 +1,83 @@
-# Fe Urea Calculator
+# FEUrea Calculator
 
-> **Domain:** Nephrology & Renal Replacement Protocols
-> **Reference Guidelines & Standards:** KDIGO & KDOQI Clinical Guidelines
+Calculate **fractional excretion of urea (FEUrea)** from paired serum and urine measurements. This repository provides a standalone browser calculator, a Python CLI (single case and CSV batch), and a FastAPI endpoint. The separate audit-agent interface is retained for backward compatibility; it is not the FEUrea calculation algorithm.
 
-<div align="center">
+## Browser calculator
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Audit Trail](https://img.shields.io/badge/Audit-HMAC--SHA256_Tamper--Evident-brightgreen.svg)
-![Zero-PHI Guard](https://img.shields.io/badge/Guard-Zero--PHI_Outbound-blue.svg)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
+The static app is located at [web/index.html](web/index.html). When GitHub Pages is configured to publish the repository root, the top-level [index.html](index.html) redirects visitors to the calculator.
 
-</div>
+- Enter serum creatinine, urine creatinine, serum urea (or BUN), and urine urea (or BUN).
+- Select the measurement conventions used in the paired samples; **do not mix serum BUN with urine urea** or mix units within an analyte pair.
+- Calculate FEUrea and view the conventional 35% interpretation with diagnostic limitations.
+- Import a local UTF-8 CSV (up to **2 MB / 5,000 rows**) and download results, including row-level input errors.
+- Browser calculations use local JavaScript: no backend, network requests, browser storage, or Pyodide is required. No measurements are uploaded by the app.
 
----
+**CSV columns:** `serum_creatinine,urine_creatinine,serum_urea,urine_urea`. Additional columns are retained. Within each serum/urine analyte pair, use matching units and analyte definitions throughout the file. Avoid patient-identifiable data.
 
-## 📖 What It Does
+## Calculation and clinical limitations
 
-Fractional Excretion of Urea (FEUrea) Calculator differentiates prerenal azotemia from acute tubular necrosis (ATN) when diuretics invalidate FENa (Fractional Excretion of Sodium).
-
-Zero-dependency Python implementation with single and batch evaluation capabilities.
-
-Author: Dr. Abu Suraih Sakhri
-License: MIT
-
----
-
-## ⚙️ Key Capabilities & Algorithmic Modules
-
-### 🔬 Analytical Functions
-
-- **`calculate_fe_urea()`**: Core FEUrea calculation using the standard formula.
-- **`calculate_metrics()`**: Legacy compatibility wrapper supporting v1/v2/v3 parameters.
-- **`process_single()`**: Evaluate a single case from CLI arguments.
-- **`process_batch()`**: Process CSV files with multiple patient records.
-
----
-
-## 📐 Mathematical Formulation
-
-The Fractional Excretion of Urea is calculated as:
-
-```
-FEUrea = (Urine_Urea × Serum_Creatinine) / (Serum_Urea × Urine_Creatinine) × 100
+```text
+FEUrea (%) = (Urine urea × Serum creatinine)
+            / (Serum urea × Urine creatinine) × 100
 ```
 
-### Clinical Interpretation
+Paired BUN values can replace paired urea values because their conversion factor cancels. Serum and urine creatinine units must match. All measurements must be finite and positive.
 
-| FEUrea Value | Classification | Recommendation |
-|:-------------|:---------------|:---------------|
-| < 35% | Prerenal Azotemia | Consider volume resuscitation and hemodynamic optimization |
-| >= 35% | Acute Tubular Necrosis / Intrinsic Renal Disease | Avoid volume overload; consider nephrology consultation |
+| FEUrea | Conventional association |
+| --- | --- |
+| Below 35% | Compatible with prerenal physiology |
+| 35% or higher | May occur with intrinsic AKI |
 
----
+**FEUrea cannot independently establish the cause of AKI or determine fluid treatment.** Diagnostic accuracy is heterogeneous and context-dependent, including in patients receiving diuretics. Consider clinical history, hemodynamics, medications, urine findings, and other causes of AKI.
 
-## 💻 Installation
+Evidence: [2024 systematic review and meta-analysis](https://pubmed.ncbi.nlm.nih.gov/38768779/) (PMID 38768779); [2026 systematic review and meta-analysis](https://pubmed.ncbi.nlm.nih.gov/41535079/) (PMID 41535079).
+
+## Python installation and usage
+
+Requires Python 3.10+:
 
 ```bash
-# Clone the repository
 git clone https://github.com/abusuraihsakhri/fe-urea-calculator.git
 cd fe-urea-calculator
-
-# Install dependencies
-pip install -e .
-
-# Or install with development dependencies
-pip install -e ".[dev]"
-```
-
----
-
-## 🚀 CLI Quickstart & Usage
-
-### 1. Single Case Evaluation
-```bash
-python -m fe_urea single --serum-creatinine 1.2 --urine-creatinine 120.0 --serum-urea 25.0 --urine-urea 250.0
-```
-
-### 2. Batch CSV Processing
-```bash
+python -m pip install -e ".[dev]"
+python -m fe_urea single --serum-creatinine 1.2 --urine-creatinine 120 \
+  --serum-urea 25 --urine-urea 250
 python -m fe_urea batch -i sample.csv -o results.csv
 ```
 
-### Parameter Reference
-| Parameter | Description | Default |
-|:----------|:------------|:--------|
-| `--serum-creatinine` | Serum creatinine (mg/dL) | 1.0 |
-| `--urine-creatinine` | Urine creatinine (mg/dL) | 100.0 |
-| `--serum-urea` | Serum urea (mg/dL) | 20.0 |
-| `--urine-urea` | Urine urea (mg/dL) | 200.0 |
+The Python batch command accepts legacy `v1,v2,v3` columns for compatibility. The legacy `calculate_metrics()` wrapper can synthesize defaults and is **not suitable for evaluating incomplete clinical cases**; the batch importer requires complete measurements. CLI single-case defaults are illustrative only.
 
-### Input Data Schema (CSV)
+## API and legacy agent demonstration
 
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `Patient_ID` | Patient identifier | Required |
-| `serum_creatinine` | Serum creatinine concentration (mg/dL) | Required |
-| `urine_creatinine` | Urine creatinine concentration (mg/dL) | Required |
-| `serum_urea` | Serum urea concentration (mg/dL) | Required |
-| `urine_urea` | Urine urea concentration (mg/dL) | Required |
-
----
-
-## 🛡️ Security & Enterprise Architecture
-
-* **Zero-PHI Outbound Interceptor:** Active regex inspection blocking SSNs, MRNs, phone numbers, and patient identifiers.
-* **Tamper-Evident HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs for every evaluation.
-* **FastAPI & Prometheus Telemetry:** Exposes OpenAPI 3.1 REST endpoints and operational Prometheus metrics (`/metrics`).
-
-### Environment Variables
-
-| Variable | Description | Default |
-|:---------|:------------|:--------|
-| `AUDIT_SECRET_KEY` | HMAC secret key for audit trail signing | Random (generated per session) |
-| `MODEL_PROVIDER` | LLM provider for supervisor chat | `mock` |
-
-> **Security Note:** Always set `AUDIT_SECRET_KEY` in production environments to ensure consistent audit trail verification across restarts.
-
----
-
-## 🧪 Testing & Verification
-
-Run the automated test suite:
+Start the API:
 
 ```bash
-pytest -v
+python cli.py serve --host 127.0.0.1 --port 8000
 ```
 
-Execute high-throughput batch simulation benchmarks:
+Use `POST /api/fe-urea` with JSON numbers for `serum_creatinine`, `urine_creatinine`, `serum_urea`, and `urine_urea`. Invalid measurements return HTTP 422. Interactive API documentation is served at `/docs`. The original `/api/audit`, `/api/chat`, `/metrics`, and audit endpoints remain for compatibility; `/metrics` returns JSON rather than Prometheus text.
+
+Legacy workers use generic demonstration thresholds that are **not validated FEUrea decision rules**. The conversational adapter produces a deterministic mock response, not clinical verification or an external model call.
+
+Audit logs exist in process memory and use HMAC-SHA256 integrity checks. If running the demonstration audit service beyond local development, configure `AUDIT_SECRET_KEY` securely. Identifier-pattern screening is not comprehensive de-identification or a HIPAA compliance guarantee. Do not send real patient identifiers to the demonstration API.
+
+## Testing and deployment
 
 ```bash
-python simulator.py --tasks 1000 --concurrency 8
+python -m pytest -v
+python -m compileall -q .
+node --check web/app.js
+node --test tests/web.test.mjs
 ```
 
----
+CI runs Python on 3.10–3.12 and the Node test suite in each matrix entry. The browser app has no build pipeline; the root `index.html` and `web/` directory must be published together for the default GitHub Pages redirect to work.
 
-## 🐳 Container Deployment
+The repository also includes a `Dockerfile` and `docker-compose.yml` for running the Python API. The static browser app works independently from the container.
 
-```bash
-# Build and run with Docker
-docker build -t fe-urea-calculator .
-docker run -p 8000:8000 -e AUDIT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))") fe-urea-calculator
+**Browser compatibility:** Modern Chromium, Firefox and Safari with ES module support. The UI is responsive and keyboard accessible; live-browser end-to-end testing is separate from the automated unit suite.
 
-# Or use Docker Compose
-docker-compose up -d
-```
+## Privacy and license
 
----
+Browser calculations and CSV parsing run locally. The app neither stores measurements persistently nor transmits input to a remote calculation service. Local CSV exports remain the user's responsibility. The Python API is a separate service and processes data sent to it.
 
-## 📁 Project Structure
-
-```
-fe-urea-calculator/
-├── fe_urea.py              # Core FEUrea calculation logic
-├── cli.py                  # Enterprise CLI interface
-├── simulator.py            # High-throughput simulation testing
-├── enrichment.py           # Domain enrichment engines
-├── sample.csv              # Sample input data
-├── test_fe_urea.py         # Core functionality tests
-├── agents/                 # Enterprise agent framework
-│   ├── __init__.py
-│   ├── api.py              # FastAPI REST endpoints
-│   ├── base.py             # Security, PHI guard, audit trail
-│   ├── models.py           # Pydantic data models
-│   ├── supervisor.py       # Multi-agent orchestrator
-│   ├── workers.py          # Specialized domain workers
-│   ├── llm_factory.py      # LLM provider factory
-│   ├── learning.py         # Bayesian calibration engine
-│   ├── metrics.py          # Prometheus metrics exporter
-│   └── streamer.py         # WebSocket telemetry streamer
-├── tests/                  # Additional test suites
-│   ├── test_enrichment.py
-│   └── test_fe_urea_calculator.py
-├── web/                    # Operations console UI
-│   └── index.html
-├── Dockerfile
-├── docker-compose.yml
-├── pyproject.toml
-└── README.md
-```
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+[MIT License](LICENSE).
