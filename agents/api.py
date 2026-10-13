@@ -3,7 +3,8 @@ FastAPI REST API Server for Fe Urea Calculator.
 """
 from typing import Dict, Any, List
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from fe_urea import calculate_fe_urea, ValidationError
 from .base import AuditLogger, PHIGuard
 from .models import SystemTaskPayload, ConsensusDossier
 from .supervisor import SystemSupervisor
@@ -20,6 +21,22 @@ app = FastAPI(
 class ChatRequest(BaseModel):
     query: str
 
+
+
+class FEUreaRequest(BaseModel):
+    """Pairs must use matching units and analyte definitions."""
+    serum_creatinine: float = Field(gt=0, allow_inf_nan=False)
+    urine_creatinine: float = Field(gt=0, allow_inf_nan=False)
+    serum_urea: float = Field(gt=0, allow_inf_nan=False)
+    urine_urea: float = Field(gt=0, allow_inf_nan=False)
+
+
+@app.post("/api/fe-urea")
+def api_fe_urea(payload: FEUreaRequest):
+    try:
+        return calculate_fe_urea(**payload.model_dump())
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 @app.get("/health")
 def health():
