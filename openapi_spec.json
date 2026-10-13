@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Fe Urea Calculator API",
-    "description": "Enterprise Distributed Component Platform (Clinical & Cryptographic AI) adhering to CAP / CLSI / NIST Standards.",
-    "version": "3.0.0-ENTERPRISE",
+    "description": "FEUrea calculation and legacy demonstration audit endpoints",
+    "version": "3.0.1",
     "contact": {
       "name": "Dr. Abu Suraih Sakhri",
       "url": "https://github.com/abusuraihsakhri"
@@ -22,10 +22,10 @@
     },
     "/metrics": {
       "get": {
-        "summary": "Prometheus operational metrics",
+        "summary": "JSON counters for in-process audit requests",
         "responses": {
           "200": {
-            "description": "Prometheus text metrics"
+            "description": "JSON statistics; not Prometheus text"
           }
         }
       }
@@ -76,7 +76,7 @@
     },
     "/api/chat": {
       "post": {
-        "summary": "Air-gapped supervisory conversational assistant",
+        "summary": "Return a deterministic mock response (not clinical verification)",
         "requestBody": {
           "content": {
             "application/json": {
@@ -107,6 +107,55 @@
         "responses": {
           "200": {
             "description": "Cryptographic audit trail"
+          }
+        }
+      }
+    },
+    "/api/fe-urea": {
+      "post": {
+        "summary": "Calculate fractional excretion of urea with numeric validation",
+        "description": "Within each serum/urine analyte pair, units and analyte definitions must match. The 35% cutoff is not diagnostic.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "serum_creatinine": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "urine_creatinine": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "serum_urea": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "urine_urea": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "serum_creatinine",
+                  "urine_creatinine",
+                  "serum_urea",
+                  "urine_urea"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "FEUrea percentage and non-diagnostic interpretation"
+          },
+          "422": {
+            "description": "Invalid measurements"
           }
         }
       }
