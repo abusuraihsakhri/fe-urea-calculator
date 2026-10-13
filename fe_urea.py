@@ -62,7 +62,11 @@ def calculate_fe_urea(serum_creatinine: float, urine_creatinine: float,
     for name, value in params.items():
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValidationError(f"{name} must be numeric, got {type(value).__name__}")
-        if not math.isfinite(value):
+        try:
+            finite = math.isfinite(value)
+        except (OverflowError, ValueError):
+            finite = False
+        if not finite:
             raise ValidationError(f"{name} must be finite")
         if value <= 0:
             raise ValidationError(f"{name} must be positive, got {value}")
@@ -130,6 +134,20 @@ def process_single(args) -> None:
     print(json.dumps(res, indent=2))
 
 
+def _safe_csv_cell(value):
+    """Escape untrusted spreadsheet formulas while preserving numeric values."""
+    if not isinstance(value, str):
+        return value
+    stripped = value.lstrip()
+    if stripped.startswith(("=", "+", "-", "@")):
+        try:
+            float(value)
+            return value
+        except ValueError:
+            return "'" + value
+    return value
+
+
 def process_batch(input_csv: str, output_csv: str) -> None:
     """Process batch CSV file with FEUrea calculations.
 
@@ -184,7 +202,10 @@ def process_batch(input_csv: str, output_csv: str) -> None:
         with open(output_csv, mode="w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=out_fields)
             writer.writeheader()
-            writer.writerows(out_rows)
+            writer.writerows(
+                {key: _safe_csv_cell(value) for key, value in row.items()}
+                for row in out_rows
+            )
     except PermissionError:
         print(f"Error: Permission denied writing '{output_csv}'.", file=sys.stderr)
         sys.exit(1)
