@@ -3,7 +3,8 @@ FastAPI REST API Server for Fe Urea Calculator.
 """
 from typing import Dict, Any, List
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from fe_urea import calculate_fe_urea, ValidationError
 from .base import AuditLogger, PHIGuard
 from .models import SystemTaskPayload, ConsensusDossier
 from .supervisor import SystemSupervisor
@@ -12,8 +13,8 @@ supervisor = SystemSupervisor(model_provider="mock")
 
 app = FastAPI(
     title="Fe Urea Calculator API",
-    description="Enterprise Distributed Component Platform (Clinical & Biomedical AI)",
-    version="3.0.0-ENTERPRISE",
+    description="FEUrea calculation and legacy demonstration audit endpoints",
+    version="3.0.1",
 )
 
 
@@ -21,9 +22,25 @@ class ChatRequest(BaseModel):
     query: str
 
 
+
+class FEUreaRequest(BaseModel):
+    """Pairs must use matching units and analyte definitions."""
+    serum_creatinine: float = Field(gt=0, allow_inf_nan=False)
+    urine_creatinine: float = Field(gt=0, allow_inf_nan=False)
+    serum_urea: float = Field(gt=0, allow_inf_nan=False)
+    urine_urea: float = Field(gt=0, allow_inf_nan=False)
+
+
+@app.post("/api/fe-urea")
+def api_fe_urea(payload: FEUreaRequest):
+    try:
+        return calculate_fe_urea(**payload.model_dump())
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
 @app.get("/health")
 def health():
-    return {"status": "HEALTHY", "service": "fe-urea-calculator", "domain": "Clinical & Biomedical AI", "standard": "CAP / CLSI / ISO Standards", "version": "3.0.0-ENTERPRISE"}
+    return {"status": "HEALTHY", "service": "fe-urea-calculator", "domain": "Clinical & Biomedical AI", "standard": "CAP / CLSI / ISO Standards", "version": "3.0.1"}
 
 
 @app.get("/metrics")
@@ -31,7 +48,7 @@ def metrics():
     return {
         "dossiers_processed_total": len(supervisor.dossier_registry),
         "audit_blocks_total": len(AuditLogger.get_trail()),
-        "system_status": "NOMINAL_OPTIMAL"
+        "system_status": "AVAILABLE"
     }
 
 

@@ -14,12 +14,13 @@ Clinical Interpretation:
     - FEUrea < 35%: Suggests prerenal azotemia (kidneys conserving urea)
     - FEUrea >= 35%: Suggests acute tubular necrosis (ATN) or intrinsic renal disease
 
-Reference: KDIGO & KDOQI Clinical Practice Guidelines
+Reference: Clinical FEUrea literature (35% is an imperfect heuristic)
 """
 
 import argparse
 import csv
 import json
+import math
 import sys
 from typing import Dict, Any, List, Optional
 
@@ -44,8 +45,11 @@ def calculate_fe_urea(serum_creatinine: float, urine_creatinine: float,
         Dictionary containing FEUrea score, classification, and clinical recommendation.
 
     Raises:
-        ValidationError: If any input is invalid (non-positive or non-numeric).
-        ZeroDivisionError: If denominator values are zero.
+        ValidationError: If any input is non-numeric, non-finite or non-positive.
+
+    Serum and urine values must use the same analyte definition and units
+    within each pair (urea versus BUN; creatinine). The 35% cutoff is only
+    an interpretive heuristic, not a diagnostic or treatment algorithm.
     """
     # Validate inputs
     params = {
@@ -56,24 +60,34 @@ def calculate_fe_urea(serum_creatinine: float, urine_creatinine: float,
     }
 
     for name, value in params.items():
-        if not isinstance(value, (int, float)):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValidationError(f"{name} must be numeric, got {type(value).__name__}")
+        try:
+            finite = math.isfinite(value)
+        except (OverflowError, ValueError):
+            finite = False
+        if not finite:
+            raise ValidationError(f"{name} must be finite")
         if value <= 0:
             raise ValidationError(f"{name} must be positive, got {value}")
 
     # FEUrea = (Urine_Urea * Serum_Creatinine) / (Serum_Urea * Urine_Creatinine) * 100
-    fe_urea = (urine_urea * serum_creatinine) / (serum_urea * urine_creatinine) * 100
+    fe_urea = 100.0 * (urine_urea / serum_urea) * (serum_creatinine / urine_creatinine)
+    if not math.isfinite(fe_urea):
+        raise ValidationError("Calculated FEUrea is not finite; verify input magnitudes")
     rounded_score = round(fe_urea, 2)
 
-    # Clinical classification based on KDIGO/KDOQI guidelines
+    # Conventional 35% heuristic: not independently diagnostic
     if fe_urea < 35.0:
         classification = "Prerenal Azotemia"
-        recommendation = ("FEUrea < 35% suggests prerenal state. "
-                          "Consider volume resuscitation and hemodynamic optimization.")
+        recommendation = ("FEUrea < 35% is compatible with a prerenal physiology pattern. "
+                          "Interpret alongside clinical assessment, urine microscopy, and AKI context; "
+                          "this result alone does not determine treatment.")
     else:
         classification = "Acute Tubular Necrosis / Intrinsic Renal Disease"
-        recommendation = ("FEUrea >= 35% suggests ATN or intrinsic renal pathology. "
-                          "Avoid volume overload; consider nephrology consultation.")
+        recommendation = ("FEUrea >= 35% can occur with intrinsic AKI but is not diagnostic of ATN. "
+                          "Evaluate clinical context and other AKI causes; do not base fluid "
+                          "management on this result alone.")
 
     return {
         "tool": "fe-urea-calculator",
@@ -120,6 +134,20 @@ def process_single(args) -> None:
     print(json.dumps(res, indent=2))
 
 
+def _safe_csv_cell(value):
+    """Escape untrusted spreadsheet formulas while preserving numeric values."""
+    if not isinstance(value, str):
+        return value
+    stripped = value.lstrip()
+    if stripped.startswith(("=", "+", "-", "@")):
+        try:
+            float(value)
+            return value
+        except ValueError:
+            return "'" + value
+    return value
+
+
 def process_batch(input_csv: str, output_csv: str) -> None:
     """Process batch CSV file with FEUrea calculations.
 
@@ -138,12 +166,24 @@ def process_batch(input_csv: str, output_csv: str) -> None:
         print(f"Error: Permission denied reading '{input_csv}'.", file=sys.stderr)
         sys.exit(1)
 
+    named_columns = {"serum_creatinine", "urine_creatinine", "serum_urea", "urine_urea"}
+    legacy_columns = {"v1", "v2", "v3"}
+    column_set = set(fieldnames)
+    if len(column_set) != len(fieldnames) or not all(fieldnames):
+        raise ValidationError("CSV headers must be unique and non-empty")
+    if not (named_columns <= column_set or legacy_columns <= column_set):
+        raise ValidationError("CSV requires all four named measurements or legacy v1, v2, v3")
+    if column_set.intersection({"fe_urea_percent", "classification", "clinical_recommendation"}):
+        raise ValidationError("CSV output columns cannot appear in the input")
     out_fields = fieldnames + ["fe_urea_percent", "classification", "clinical_recommendation"]
     out_rows = []
     errors = []
 
     for idx, r in enumerate(rows, start=1):
         try:
+            required = named_columns if named_columns <= column_set else legacy_columns
+            if None in r or any(r.get(name) in (None, "") for name in required):
+                raise ValidationError("Missing measurement or malformed CSV row")
             calc_res = calculate_metrics(**r)
             row_dict = dict(r)
             row_dict["fe_urea_percent"] = calc_res["fe_urea_percent"]
@@ -162,7 +202,10 @@ def process_batch(input_csv: str, output_csv: str) -> None:
         with open(output_csv, mode="w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=out_fields)
             writer.writeheader()
-            writer.writerows(out_rows)
+            writer.writerows(
+                {key: _safe_csv_cell(value) for key, value in row.items()}
+                for row in out_rows
+            )
     except PermissionError:
         print(f"Error: Permission denied writing '{output_csv}'.", file=sys.stderr)
         sys.exit(1)
