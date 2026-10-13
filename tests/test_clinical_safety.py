@@ -78,3 +78,22 @@ def test_api_returns_correct_feurea_and_validates():
     assert response.json()["fe_urea_percent"] == 35
     assert client.post("/api/fe-urea", json={**valid, "serum_urea": 0}).status_code == 422
     assert client.post("/api/fe-urea", json={**valid, "serum_urea": "NaN"}).status_code == 422
+
+
+def test_batch_export_escapes_spreadsheet_formula(tmp_path):
+    source = tmp_path / "input.csv"
+    destination = tmp_path / "out.csv"
+    source.write_text(
+        "label,serum_creatinine,urine_creatinine,serum_urea,urine_urea\n"
+        '"=HYPERLINK(""https://example.com"")",1,100,20,100\n',
+        encoding="utf-8",
+    )
+    process_batch(str(source), str(destination))
+    with destination.open(encoding="utf-8", newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    assert rows[0]["label"].startswith("'=HYPERLINK")
+
+
+def test_very_large_int_rejected():
+    with pytest.raises(ValidationError):
+        calculate_fe_urea(10 ** 1000, 100, 20, 100)
